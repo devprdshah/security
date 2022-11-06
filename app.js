@@ -6,9 +6,13 @@ const mongoose = require("mongoose");
 const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
-const { framework } = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const findOrCreate = require('mongoose-findorcreate');
+const { framework } = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const findOrCreate = require("mongoose-findorcreate");
+const { kStringMaxLength } = require("buffer");
+
+const FacebookStrategy = require("passport-facebook").Strategy;
+
 
 
 
@@ -33,7 +37,8 @@ mongoose.connect("mongodb://localhost:27017/userDB");
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    facebookId: String
 
 });
 
@@ -48,16 +53,18 @@ const User = new mongoose.model("User", userSchema);
 passport.use(User.createStrategy());
 
 
-passport.serializeUser(function(user,done){
-    done(null ,user.id);
+passport.serializeUser(function (user, done) {
+    done(null, user.id);
 });
 
-passport.deserializeUser(function(id,done){
-    User.findById(id , function(err ,user){
-        done(err ,user);
+passport.deserializeUser(function (id, done) {
+    User.findById(id, function (err, user) {
+        done(err, user);
     });
 });
 
+
+//strategy for google
 
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
@@ -76,12 +83,34 @@ passport.use(new GoogleStrategy({
 
 
 
+//strategy for facebook
+
+
+passport.use(new FacebookStrategy({
+    clientID: process.env.APP_ID,
+    clientSecret: process.env.APP_SECRET,
+    callbackURL: "http://localhost:3000/auth/facebook/secrets"
+},
+    function (accessToken, refreshToken, profile, cb) {
+        console.log(profile);
+        console.log(profile.displayName);
+        User.findOrCreate({ facebookId: profile.id }, function (err, user) {
+            return cb(err, user);
+        });
+    }
+));
+
+
+
 
 
 app.get("/", function (req, res) {
     res.render("home");
 
 });
+
+
+//rouths of google auth
 
 app.get("/auth/google",
     passport.authenticate("google", { scope: ["profile"] }));
@@ -92,6 +121,22 @@ app.get("/auth/google/secrets",
         // Successful authentication, redirect secrets.
         res.redirect("/secrets");
     });
+
+
+
+//routs of facebook
+
+app.get("/auth/facebook",
+    passport.authenticate("facebook"));
+
+app.get("/auth/facebook/secrets",
+    passport.authenticate("facebook", { failureRedirect: "/login" }),
+    function (req, res) {
+        // Successful authentication, redirect home.
+        res.redirect("/secrets");
+    });
+
+
 
 app.get("/login", function (req, res) {
     res.render("login");
